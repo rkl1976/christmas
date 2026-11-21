@@ -1,10 +1,10 @@
 # Builds the Microsoft Store package (MSIX) of the Windows version.
 #
 #   store\make-msix.ps1 -Version 1.8.0 -IdentityName <Package/Identity/Name> -Publisher <Package/Identity/Publisher> `
-#                       -PublisherDisplayName <Package/Properties/PublisherDisplayName>
+#                       -PublisherDisplayName <Package/Properties/PublisherDisplayName> -DisplayName <reserved name>
 #
-# The three identity values come from Partner Center (the app's Product identity page); without them the package
-# gets a test identity that the Store would refuse. The package is left unsigned: the Store signs it.
+# The three identity values come from Partner Center (the app's Product identity page), and the display name must be
+# one of the app's reserved names there; without them the package gets a test identity that the Store would refuse. The package is left unsigned: the Store signs it.
 #
 # Steps: build JuleHygge.exe with the version, lay out the package in obj\store\layout (the exe, the manifest and
 # the logos, drawn like the app icon), and pack it with makeappx.exe from the Windows SDK into
@@ -18,6 +18,8 @@ param(
     [string]$IdentityName = 'JuleHygge.Test',
     [string]$Publisher = 'CN=JuleHygge Test',
     [string]$PublisherDisplayName = 'JuleHygge',
+    [string]$DisplayName = 'JuleHygge Test',   # the Store needs a name reserved in Partner Center
+
     [switch]$Register
 )
 $ErrorActionPreference = 'Stop'
@@ -54,7 +56,8 @@ Save-Logo 'StoreLogo' 50 50 1.0
 function Escape-Xml([string]$s) { return [System.Security.SecurityElement]::Escape($s) }
 $manifest = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'AppxManifest.xml'))
 $manifest = $manifest.Replace('$IdentityName$', (Escape-Xml $IdentityName)).Replace('$Publisher$', (Escape-Xml $Publisher)).
-    Replace('$PublisherDisplayName$', (Escape-Xml $PublisherDisplayName)).Replace('$Version$', "$Version.0")
+    Replace('$PublisherDisplayName$', (Escape-Xml $PublisherDisplayName)).Replace('$DisplayName$', (Escape-Xml $DisplayName)).
+    Replace('$Version$', "$Version.0")
 [System.IO.File]::WriteAllText((Join-Path $layout 'AppxManifest.xml'), $manifest, (New-Object System.Text.UTF8Encoding $false))
 Write-Host "Package layout: $layout"
 

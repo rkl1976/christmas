@@ -23,7 +23,8 @@ no SmartScreen warning), installs and updates it, and handles payment and VAT.
 - The **Store package** workflow (`.github/workflows/store.yml`, runs on every push to `microsoft-store`) packs it on GitHub's Windows runner
   and keeps `JuleHygge-x.y.z.msix` as a workflow artifact. The identity comes from the repository variables
   `STORE_IDENTITY_NAME`, `STORE_PUBLISHER` and `STORE_PUBLISHER_NAME`, copied from Partner Center (the app's
-  Product identity page).
+  Product identity page), and the app name from `STORE_DISPLAY_NAME`, which must be a name reserved there (the
+  working name is "Desktop Hygge", not final).
 - Each Store update needs a higher version than the last one submitted.
 
 ## Test locally

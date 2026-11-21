@@ -6,7 +6,8 @@
 # The package identity comes from repository variables (Settings > Secrets and variables > Actions > Variables),
 # copied from Partner Center's Product identity page: STORE_IDENTITY_NAME (Package/Identity/Name),
 # STORE_PUBLISHER (Package/Identity/Publisher, "CN=...") and STORE_PUBLISHER_NAME
-# (Package/Properties/PublisherDisplayName). Without them the package gets a test identity the Store refuses.
+# (Package/Properties/PublisherDisplayName), plus STORE_DISPLAY_NAME, the app name reserved there (the package's
+# display name must be one of the reserved names). Without them the package gets a test identity the Store refuses.
 name: Store package
 
 on:
@@ -48,9 +49,11 @@ jobs:
           ID_NAME: ${{ vars.STORE_IDENTITY_NAME }}
           ID_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
           ID_PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_NAME }}
+          DISPLAY_NAME: ${{ vars.STORE_DISPLAY_NAME }}
         run: |
           $a = @{ Version = '${{ steps.ver.outputs.version }}' }
           if ($env:ID_NAME) { $a.IdentityName = $env:ID_NAME; $a.Publisher = $env:ID_PUBLISHER; $a.PublisherDisplayName = $env:ID_PUBLISHER_NAME }
+          if ($env:DISPLAY_NAME) { $a.DisplayName = $env:DISPLAY_NAME }
           else { Write-Host '::warning::No STORE_IDENTITY_NAME variable: the package has a test identity the Store will refuse.' }
           .\store\make-msix.ps1 @a
           if (-not (Test-Path "obj\store\JuleHygge-$($a.Version).msix")) { Write-Error 'No package was built'; exit 1 }

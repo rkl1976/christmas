@@ -1,0 +1,62 @@
+# Builds the Microsoft Store package (JuleHygge-<version>.msix) with store\make-msix.ps1 on every push to the
+# microsoft-store branch (where the Store version is developed, apart from main) and keeps it as a workflow
+# artifact, to upload in Partner Center (the app's submission, Packages). It is not attached to a GitHub release.
+# "Run workflow" in the Actions tab only appears once this file is also on main; until then, push to build.
+#
+# The package identity comes from repository variables (Settings > Secrets and variables > Actions > Variables),
+# copied from Partner Center's Product identity page: STORE_IDENTITY_NAME (Package/Identity/Name),
+# STORE_PUBLISHER (Package/Identity/Publisher, "CN=...") and STORE_PUBLISHER_NAME
+# (Package/Properties/PublisherDisplayName). Without them the package gets a test identity the Store refuses.
+name: Store package
+
+on:
+  push:
+    branches: [microsoft-store]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version (x.y.z); empty = the newest release tag. The Store needs a higher version for each update.
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # all tags
+
+      - name: Version
+        id: ver
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $v = $env:VERSION
+          if (-not $v) { $v = (git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | Select-Object -First 1) -replace '^v', '' }
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { Write-Error "Version '$v' is not like 1.2.3"; exit 1 }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build the package
+        shell: powershell   # Windows PowerShell 5.1, like on the developer machine
+        env:
+          ID_NAME: ${{ vars.STORE_IDENTITY_NAME }}
+          ID_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
+          ID_PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_NAME }}
+        run: |
+          $a = @{ Version = '${{ steps.ver.outputs.version }}' }
+          if ($env:ID_NAME) { $a.IdentityName = $env:ID_NAME; $a.Publisher = $env:ID_PUBLISHER; $a.PublisherDisplayName = $env:ID_PUBLISHER_NAME }
+          else { Write-Host '::warning::No STORE_IDENTITY_NAME variable: the package has a test identity the Store will refuse.' }
+          .\store\make-msix.ps1 @a
+          if (-not (Test-Path "obj\store\JuleHygge-$($a.Version).msix")) { Write-Error 'No package was built'; exit 1 }
+
+      - name: Keep as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: JuleHygge-store-${{ steps.ver.outputs.version }}
+          path: obj/store/JuleHygge-*.msix

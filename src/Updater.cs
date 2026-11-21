@@ -36,6 +36,9 @@ namespace JuleHygge
 
         public static bool IsReleaseBuild { get { return Current > new Version(0, 0, 0, 0); } }
 
+        // Only a released exe outside a package updates itself; the Store installs the packaged version's updates.
+        public static bool SelfUpdates { get { return IsReleaseBuild && !Program.IsPackaged; } }
+
         public static string Display(Version v) { return v.Major + "." + v.Minor + "." + v.Build; }
 
         // "1.4" and "1.4.0.0" compare equal after this.

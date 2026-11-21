@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Microsoft Store package (MSIX). store\make-msix.ps1 fills in the $...$ values: the identity comes from
+     Partner Center (the app's Product identity page), the version from the release tag. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap desktop rescap">
+  <Identity Name="$IdentityName$" Publisher="$Publisher$" Version="$Version$" ProcessorArchitecture="neutral" />
+  <Properties>
+    <DisplayName>JuleHygge</DisplayName>
+    <PublisherDisplayName>$PublisherDisplayName$</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="da-DK" />
+    <Resource Language="en-US" />
+    <Resource Language="sv-SE" />
+    <Resource Language="de-DE" />
+    <Resource Language="nl-NL" />
+  </Resources>
+  <Applications>
+    <Application Id="JuleHygge" Executable="JuleHygge.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="JuleHygge" Description="Sne, nisser og julestemning på skrivebordet"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- Autostart in the package (the Run key is virtualized there). Off until the user switches it on under
+             Windows' Startup apps; the menu item "Start med Windows" opens that page. -->
+        <desktop:Extension Category="windows.startupTask" Executable="JuleHygge.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="JuleHyggeStartup" Enabled="false" DisplayName="JuleHygge" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

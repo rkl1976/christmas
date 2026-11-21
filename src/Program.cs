@@ -42,6 +42,22 @@ namespace JuleHygge
         public static string ExePath;
         public static bool IsChild;
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern int GetCurrentPackageFullName(ref int length, System.Text.StringBuilder name);
+
+        // True when the app runs from an MSIX package (the Microsoft Store version, store\make-msix.ps1). The Store
+        // then installs updates, the install folder is read-only, and autostart is the package's startup task.
+        public static readonly bool IsPackaged = DetectPackage();
+
+        static bool DetectPackage()
+        {
+            try
+            {
+                int len = 0;
+                return GetCurrentPackageFullName(ref len, null) != 15700;   // APPMODEL_ERROR_NO_PACKAGE
+            }
+            catch { return false; }   // before Windows 8 there are no packages
+        }
+
         [STAThread]
         static void Main(string[] args)
         {

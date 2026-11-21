@@ -868,9 +868,17 @@ namespace JuleHygge
             menu.Items.Add(Toggle("Pause ved fuldskærm (spil/film)", () => Cfg.PauseFullscreen, v => Cfg.PauseFullscreen = v));
             // The checkmark always mirrors the registry (re-read when the menu opens), and a failed
             // write (e.g. locked down by policy) just leaves the checkmark showing the real state.
+            // In the Store package the Run key is virtualized and ignored: there it is the package's startup task
+            // (store\AppxManifest.xml), which the user switches on under Windows' Startup apps, opened from here.
             var autostart = new ToolStripMenuItem("Start med Windows");
+            if (Program.IsPackaged)
+                autostart.Click += (s, e) =>
+                {
+                    try { System.Diagnostics.Process.Start("ms-settings:startupapps"); }
+                    catch (Exception ex) { ErrorLog.Write(ex); }
+                };
             autostart.Checked = GetAutostart();
-            autostart.CheckOnClick = true;
+            autostart.CheckOnClick = !Program.IsPackaged;
             autostart.CheckedChanged += (s, e) =>
             {
                 if (syncingMenu) return;
@@ -904,7 +912,7 @@ namespace JuleHygge
             versionItem.Enabled = false;
             dynamicItems.Add(versionItem);
             menu.Items.Add(versionItem);
-            if (Updater.IsReleaseBuild)
+            if (Updater.SelfUpdates)
             {
                 menu.Items.Add(Toggle("Opdatér automatisk", () => Cfg.AutoUpdate, v => Cfg.AutoUpdate = v));
                 var checkNow = new ToolStripMenuItem("Søg efter opdatering nu");
@@ -1077,6 +1085,7 @@ namespace JuleHygge
                 Cfg.LastVersion = now;
                 Cfg.Save();
             }
+            if (!Updater.SelfUpdates) return;
             updateTimer = new Timer();
             updateTimer.Interval = 60 * 1000;
             updateTimer.Tick += (s, e) =>
@@ -1146,6 +1155,7 @@ namespace JuleHygge
         // True only if the Run entry points at this exe; an entry for a moved or old copy counts as off.
         static bool GetAutostart()
         {
+            if (Program.IsPackaged) return false;
             try
             {
                 using (var k = Registry.CurrentUser.OpenSubKey(RunKey))

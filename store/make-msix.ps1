@@ -25,7 +25,7 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { Write-Error "Version must look like 1.2.3, got '$Version'"; exit 1 }
 $root = Split-Path $PSScriptRoot -Parent
-. (Join-Path $root 'tools\AppIcon.ps1')   # New-IconBitmap
+. (Join-Path $root 'tools\AppIcon.ps1')   # Get-AppIconBitmap
 
 & (Join-Path $root 'build.ps1') -Version $Version
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit 1 }
@@ -36,10 +36,10 @@ if (Test-Path $layout) { Remove-Item -Recurse -Force $layout }
 New-Item -ItemType Directory -Force (Join-Path $layout 'Assets') | Out-Null
 Copy-Item (Join-Path $root 'JuleHygge.exe') $layout
 
-# The logos: the snowflake icon centred on a transparent canvas of each size Windows and the Store ask for.
+# The logos: the app icon (tools\AppIcon.ps1) centred on a transparent canvas of each size Windows and the Store ask for.
 function Save-Logo([string]$name, [int]$w, [int]$h, [double]$share) {
     $size = [int]([Math]::Min($w, $h) * $share)
-    $icon = New-IconBitmap $size
+    $icon = Get-AppIconBitmap $size
     $bmp = New-Object System.Drawing.Bitmap $w, $h, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.Clear([System.Drawing.Color]::Transparent)
@@ -49,8 +49,8 @@ function Save-Logo([string]$name, [int]$w, [int]$h, [double]$share) {
     $bmp.Dispose()
 }
 Save-Logo 'Square44x44Logo' 44 44 1.0
-Save-Logo 'Square150x150Logo' 150 150 0.66
-Save-Logo 'Wide310x150Logo' 310 150 0.66
+Save-Logo 'Square150x150Logo' 150 150 0.8
+Save-Logo 'Wide310x150Logo' 310 150 0.8
 Save-Logo 'StoreLogo' 50 50 1.0
 
 function Escape-Xml([string]$s) { return [System.Security.SecurityElement]::Escape($s) }

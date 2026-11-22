@@ -11,8 +11,9 @@ no SmartScreen warning), installs and updates it, and handles payment and VAT.
 - Autostart is the package's startup task (`windows.startupTask` in `store/AppxManifest.xml`, off by default),
   because the Run key is virtualized in a package. The menu item "Start med Windows" opens Windows' Startup apps
   page (`ms-settings:startupapps`), where the user switches it on.
-- Settings and logs: the package redirects `%APPDATA%\JuleHygge` to its own folder, so the Store version and a
-  downloaded exe do not share settings.
+- Settings: the installed Store version (2026-11-22) reads and writes the same `%APPDATA%\JuleHygge\settings.ini`
+  as a downloaded exe (no redirection, since the folder already existed), so the two share settings and opened
+  calendar doors.
 
 ## Build
 
@@ -44,4 +45,4 @@ layout for the current user with a test identity. Start JuleHygge from the Start
    privacy policy URL. Under Properties, declare that the app uses `runFullTrust` (a desktop app that draws an
    overlay over all screens and reads window positions for the snow on windows).
 
-Not done yet: a free trial (needs the Store licensing API), and Store listing texts and screenshots.
+Live since 2026-11-22 (Store ID 9N6LHWPTZQBJ). Listing texts: `store/listing/`; screenshots and icon: see AGENTS.md. Not done yet: a free trial (needs the Store licensing API) and automated Store updates.

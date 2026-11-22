@@ -1,5 +1,5 @@
 # Builds JuleHygge.exe with the C# compiler that ships with Windows (.NET Framework 4.x).
-# The app icon is drawn here at build time, so the repo contains no image files.
+# The .ico is made here at build time from tools\AppIcon.ps1 (assets\icon\desktop-hygge.png, or the drawn snowflake).
 # -Version x.y.z stamps the exe (the GitHub workflow passes the release tag). Without it the exe is 0.0.0,
 # a development build that never updates itself.
 param([string]$Version = '0.0.0')
@@ -12,12 +12,12 @@ if (-not (Test-Path $csc)) { $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framewo
 $out = Join-Path $PSScriptRoot 'JuleHygge.exe'
 $ico = Join-Path $PSScriptRoot 'JuleHygge.ico'
 
-. (Join-Path $PSScriptRoot 'tools\AppIcon.ps1')   # New-IconBitmap: the snowflake icon, shared with store\make-msix.ps1
+. (Join-Path $PSScriptRoot 'tools\AppIcon.ps1')   # Get-AppIconBitmap: the app icon, shared with store\make-msix.ps1
 
 # Encodes one icon entry: PNG for 256 px, classic 32-bit DIB (BGRA + AND mask) for smaller sizes,
 # because many readers (including System.Drawing.Icon) only understand PNG in the 256 px entry.
 function Get-IconEntryBytes([int]$size) {
-    $bmp = New-IconBitmap $size
+    $bmp = Get-AppIconBitmap $size
     $ms = New-Object System.IO.MemoryStream
     if ($size -ge 256) {
         $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)

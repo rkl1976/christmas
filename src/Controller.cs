@@ -746,7 +746,7 @@ namespace JuleHygge
         void BuildTray()
         {
             tray = new NotifyIcon();
-            tray.Icon = AppIcon;
+            tray.Icon = ThemeIcon;
             tray.Text = "Jule-hygge";
             tray.Visible = true;
             tray.DoubleClick += (s, e) => LaunchSanta();
@@ -983,6 +983,7 @@ namespace JuleHygge
                 t.Item.Text = Lang.T(Autumn ? (t.Efteraar ?? t.Jul) : (own ?? t.Jul));
             }
             kiteItem.Available = Autumn;
+            if (tray != null && tray.Icon != ThemeIcon) tray.Icon = ThemeIcon;
             countdownItem.Text = Countdown();
             snowmanItem.Text = Autumn ? Lang.T("Høstak med fugleskræmsel (trin {0} af {1})", SnowmanStage, SnowmanMaxStage) : Lang.T("Snemand");
             folkAutoItem.Text = Lang.T("Automatisk efter sprog og land ({0})", Lang.T(Folk.Name(Folk.Auto)));
@@ -1178,36 +1179,89 @@ namespace JuleHygge
             catch (Exception ex) { ErrorLog.Write(ex); }
         }
 
-        static Icon MakeIcon()
+        // The tray icon follows the theme: a snowflake on a red disc at Christmas (also the calendar's window icon,
+        // AppIcon), a leaf on an orange disc in autumn. Drawn in a 0..100 unit space at the system's small icon size,
+        // so the finer branches and veins only appear where there is room for them. (The exe and Store icon is the
+        // mug in assets\icon, see tools\AppIcon.ps1.)
+        Icon leafIcon;
+        Icon ThemeIcon { get { return Autumn ? (leafIcon ?? (leafIcon = MakeIcon(true))) : AppIcon; } }
+
+        static Icon MakeIcon(bool leaf = false)
         {
-            var bmp = new Bitmap(32, 32, PixelFormat.Format32bppArgb);
-            using (var gg = Graphics.FromImage(bmp))
+            int s = Math.Max(16, SystemInformation.SmallIconSize.Width);
+            var bmp = new Bitmap(s, s, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bmp))
             {
-                gg.SmoothingMode = SmoothingMode.AntiAlias;
-                gg.Clear(Color.Transparent);
-                using (var b = new SolidBrush(Color.FromArgb(200, 25, 35))) gg.FillEllipse(b, 1, 1, 30, 30);
-                using (var p = new Pen(Color.White, 2.2f))
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.Clear(Color.Transparent);
+                g.ScaleTransform(s / 100f, s / 100f);
+                float px = 100f / s;   // one pixel, in units
+                bool small = s < 24;
+                var disc = new RectangleF(3, 3, 94, 94);
+                using (var b = new LinearGradientBrush(disc, leaf ? Color.FromArgb(235, 130, 45) : Color.FromArgb(225, 45, 55),
+                                                       leaf ? Color.FromArgb(170, 70, 20) : Color.FromArgb(150, 15, 25), 90f))
+                    g.FillEllipse(b, disc);
+                if (leaf) DrawIconLeaf(g, small, px); else DrawIconFlake(g, small, px);
+            }
+            return Icon.FromHandle(bmp.GetHicon());
+        }
+
+        // Six arms with branches along them (one pair at small sizes); the arms stop short of the rim.
+        static void DrawIconFlake(Graphics g, bool small, float px)
+        {
+            const float R = 34;
+            float[][] branches = small ? new[] { new[] { 0.62f, 0.30f } }
+                                       : new[] { new[] { 0.42f, 0.30f }, new[] { 0.68f, 0.24f }, new[] { 0.88f, 0.13f } };
+            using (var p = new Pen(Color.White, Math.Max(4.5f, 1.3f * px)))
+            {
+                p.StartCap = p.EndCap = LineCap.Round;
+                for (int i = 0; i < 6; i++)
                 {
-                    p.StartCap = p.EndCap = LineCap.Round;
-                    for (int k = 0; k < 3; k++)
+                    double a = i * Math.PI / 3 - Math.PI / 2;
+                    float ux = (float)Math.Cos(a), uy = (float)Math.Sin(a);
+                    g.DrawLine(p, 50 + ux * 3, 50 + uy * 3, 50 + ux * R, 50 + uy * R);
+                    foreach (var br in branches)
                     {
-                        double a = k * Math.PI / 3 + Math.PI / 2;
-                        float dx = (float)Math.Cos(a) * 11, dy = (float)Math.Sin(a) * 11;
-                        gg.DrawLine(p, 16 - dx, 16 - dy, 16 + dx, 16 + dy);
-                        for (int sgn = -1; sgn <= 1; sgn += 2)
+                        float bx = 50 + ux * R * br[0], by = 50 + uy * R * br[0];
+                        for (int side = -1; side <= 1; side += 2)
                         {
-                            float ex = 16 + sgn * dx * 0.65f, ey = 16 + sgn * dy * 0.65f;
-                            double a1 = a + (sgn > 0 ? 0 : Math.PI);
-                            for (int side = -1; side <= 1; side += 2)
-                            {
-                                double ba = a1 + side * 2.4;
-                                gg.DrawLine(p, ex, ey, ex + (float)Math.Cos(ba) * 4, ey + (float)Math.Sin(ba) * 4);
-                            }
+                            double ba = a + side * Math.PI * 0.3;
+                            g.DrawLine(p, bx, by, bx + (float)Math.Cos(ba) * R * br[1], by + (float)Math.Sin(ba) * R * br[1]);
                         }
                     }
                 }
             }
-            return Icon.FromHandle(bmp.GetHicon());
+        }
+
+        // A white leaf tilted to the right, with its stem and (at larger sizes) side veins in the disc's colour.
+        static void DrawIconLeaf(Graphics g, bool small, float px)
+        {
+            var st = g.Save();
+            g.TranslateTransform(50, 50); g.RotateTransform(-35); g.TranslateTransform(-50, -50);
+            using (var path = new GraphicsPath())
+            using (var white = new SolidBrush(Color.White))
+            {
+                path.AddBezier(50, 15, 73, 30, 71, 60, 50, 80);
+                path.AddBezier(50, 80, 29, 60, 27, 30, 50, 15);
+                g.FillPath(white, path);
+            }
+            using (var stem = new Pen(Color.White, Math.Max(4f, 1.2f * px)))
+            {
+                stem.StartCap = stem.EndCap = LineCap.Round;
+                g.DrawLine(stem, 50, 78, 50, 90);
+            }
+            using (var vein = new Pen(Color.FromArgb(205, 100, 35), Math.Max(small ? 3f : 2.4f, px)))
+            {
+                vein.StartCap = vein.EndCap = LineCap.Round;
+                g.DrawLine(vein, 50, 24, 50, 76);
+                if (!small)
+                    foreach (int y in new[] { 36, 50, 63 })
+                    {
+                        g.DrawLine(vein, 50, y + 6, 38, y);
+                        g.DrawLine(vein, 50, y + 6, 62, y);
+                    }
+            }
+            g.Restore(st);
         }
     }
 }

@@ -1,6 +1,32 @@
-# Draws the app icon (a white snowflake on a red disc, the same design as the tray icon) at the given pixel size
-# and returns a Bitmap. Dot-sourced by build.ps1 (the .ico) and store\make-msix.ps1 (the package logos).
+# The app icon at a given pixel size, as a Bitmap. Dot-sourced by build.ps1 (the .ico) and store\make-msix.ps1
+# (the package logos).
+#
+# Get-AppIconBitmap uses assets\icon\desktop-hygge.png (a mug of cocoa in a knitted sleeve, made with an image
+# model and cleaned of stray pixels; the one image file in the app, see AGENTS.md) and falls back to the drawn
+# snowflake (New-IconBitmap, the same design as the tray icon) when the file is missing.
 Add-Type -AssemblyName System.Drawing
+$script:AppIconPng = Join-Path $PSScriptRoot '..\assets\icon\desktop-hygge.png'
+
+function Get-AppIconBitmap([int]$size) {
+    if (-not (Test-Path $script:AppIconPng)) { return New-IconBitmap $size }
+    $src = [System.Drawing.Bitmap]::FromFile((Resolve-Path $script:AppIconPng))
+    # halve step by step down to twice the target, then the last step: sharper small icons than one big jump
+    $cur = $src
+    while ($cur.Width -gt $size * 2) {
+        $n = [int][Math]::Max($size * 2, $cur.Width / 2)
+        $next = New-Object System.Drawing.Bitmap $n, $n, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $g = [System.Drawing.Graphics]::FromImage($next); $g.InterpolationMode = 'HighQualityBicubic'; $g.PixelOffsetMode = 'HighQuality'
+        $g.DrawImage($cur, 0, 0, $n, $n); $g.Dispose()
+        if ($cur -ne $src) { $cur.Dispose() }
+        $cur = $next
+    }
+    $bmp = New-Object System.Drawing.Bitmap $size, $size, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [System.Drawing.Graphics]::FromImage($bmp); $g.InterpolationMode = 'HighQualityBicubic'; $g.PixelOffsetMode = 'HighQuality'
+    $g.DrawImage($cur, 0, 0, $size, $size); $g.Dispose()
+    if ($cur -ne $src) { $cur.Dispose() }
+    $src.Dispose()
+    return $bmp
+}
 
 function New-IconBitmap([int]$size) {
     $k = $size / 32.0

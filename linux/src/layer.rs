@@ -370,6 +370,14 @@ pub struct Layer {
     /// There is a screen directly to the left / right (elves walk over to it).
     pub neighbor_left: bool,
     pub neighbor_right: bool,
+    /// The screen to the left / right can take one more elf as a guest (set by the controller after each frame).
+    pub guest_room_left: bool,
+    pub guest_room_right: bool,
+    /// Places lent to (-) or borrowed from (+) the neighbouring screens. An elf that walks over to the neighbour
+    /// takes its place along: the old screen adds no new one for it, and the new screen sends nobody away.
+    /// (Before, every crossing made a new elf on the old screen while the new screen's surplus one was still
+    /// walking out, uncounted: three screens with 12 chosen showed up to 25 on one of them.)
+    pub elf_balance: i32,
     w: i32,
     h: i32,
     /// Scale of all figures: screen height / 1080 (at least 0.6), as on Windows.
@@ -463,6 +471,9 @@ impl Layer {
             index: 0,
             neighbor_left: false,
             neighbor_right: false,
+            guest_room_left: false,
+            guest_room_right: false,
+            elf_balance: 0,
             w,
             h,
             s,

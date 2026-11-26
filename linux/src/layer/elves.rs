@@ -64,6 +64,11 @@ impl Elf {
     pub fn dir(&self) -> f32 {
         self.dir
     }
+
+    /// Walking over to the neighbouring screen by its own choice (not sent away): its place goes with it.
+    pub fn crossing(&self) -> bool {
+        self.crossing
+    }
 }
 
 impl Layer {
@@ -80,11 +85,16 @@ impl Layer {
         std::mem::take(&mut self.outgoing)
     }
 
-    /// An elf arriving from the neighbouring screen walks in at the matching edge.
+    /// Elves on their way over to the neighbour in that direction: decided, not handed over yet.
+    pub fn elves_crossing(&self, dir: f32) -> i32 {
+        self.elves.iter().filter(|e| e.crossing && e.dir * dir > 0.0).count() as i32
+    }
+
+    /// An elf arriving from the neighbouring screen walks in at the matching edge. One that was sent away keeps
+    /// walking, across this screen and out (it is not counted here).
     pub fn receive_elf(&mut self, mut e: Elf, from_scale: f32) {
         let s = self.s;
         e.crossing = false;
-        e.leaving = false;
         e.entering = true;
         e.state = ElfState::Walk;
         e.speed = e.speed / from_scale * s;
@@ -169,7 +179,11 @@ impl Layer {
                 (o + o.signum()).clamp(-2, 2)
             };
         }
-        let target = if st.elves { (st.elf_count + self.elf_offset).max(1) as usize } else { 0 };
+        // a lent or borrowed place is forgotten when there is no neighbour any more (or no elves)
+        if !st.elves || (!self.neighbor_left && !self.neighbor_right) {
+            self.elf_balance = 0;
+        }
+        let target = if st.elves { ((st.elf_count + self.elf_offset).max(1) + self.elf_balance).max(1) as usize } else { 0 };
         let staying = self.elves.iter().filter(|e| !e.leaving).count();
         if staying < target {
             // At start-up everyone is already there; later arrivals walk in from a screen edge.
@@ -210,6 +224,11 @@ impl Layer {
         // where an elf vanished or reappeared by magic (x, size)
         let mut puffs: Vec<(f32, f32)> = Vec::new();
         let mut exchanges = Vec::new();
+        // An elf walks over to the neighbour only while this screen has not already lent one, keeps at least one
+        // itself, and the neighbour has no guest already.
+        let mut going = self.elves.iter().filter(|e| e.crossing).count() as i32;
+        let (balance, places) = (self.elf_balance, target as i32);
+        let (room_left, room_right) = (self.guest_room_left, self.guest_room_right);
         for i in 0..self.elves.len() {
             let e = &mut self.elves[i];
             e.meet_cooldown = (e.meet_cooldown - dt).max(0.0);
@@ -301,17 +320,20 @@ impl Layer {
                 }
                 if !e.entering && !e.leaving && !e.crossing {
                     // At an edge with a neighbouring screen, about half the elves walk on over to it.
+                    let free = balance - going > -1 && places - going > 1;
                     if e.x < 30.0 * s {
-                        if self.neighbor_left && self.rng.f() < 0.5 {
+                        if self.neighbor_left && self.rng.f() < 0.5 && free && room_left {
                             e.crossing = true;
+                            going += 1;
                         } else {
                             e.x = 30.0 * s;
                             e.dir = 1.0;
                         }
                     }
                     if e.x > w - 30.0 * s {
-                        if self.neighbor_right && self.rng.f() < 0.5 {
+                        if self.neighbor_right && self.rng.f() < 0.5 && free && room_right {
                             e.crossing = true;
+                            going += 1;
                         } else {
                             e.x = w - 30.0 * s;
                             e.dir = -1.0;

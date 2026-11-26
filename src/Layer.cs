@@ -1516,6 +1516,39 @@ namespace JuleHygge
 
         // Number of nisser above/below the chosen count right now (drifts by at most ±2).
         int nisseOffset;
+        // Places lent to (−) or borrowed from (+) the neighbouring screens. A nisse that walks over to the neighbour
+        // takes its place along: the old screen adds no new one for it, and the new screen sends nobody away.
+        // (Before, every crossing made a new nisse on the old screen while the new screen's surplus one was still
+        // walking out, uncounted: three screens with 12 chosen showed up to 25 on one of them.)
+        int nisseBalance;
+
+        // Nisser on their way over to the neighbour in that direction: decided, not handed over yet.
+        int NisserCrossing(float dir)
+        {
+            int k = 0;
+            foreach (var n in nisser) if (n.Crossing && n.Dir * dir > 0) k++;
+            return k;
+        }
+
+        // Whether one more nisse may walk in from a neighbour: at most one guest at a time, those on their way counted.
+        bool TakesGuest()
+        {
+            int coming = 0;
+            var left = c.Neighbor(this, -1); var right = c.Neighbor(this, 1);
+            if (left != null) coming += left.NisserCrossing(1);
+            if (right != null) coming += right.NisserCrossing(-1);
+            return nisseBalance + coming < 1;
+        }
+
+        // At an edge with a neighbouring screen, about half the nisser walk on over to it, as long as this screen has
+        // not already lent one, keeps at least one itself, and the neighbour has no guest already.
+        bool MayCross(float dir, int target)
+        {
+            var next = c.Neighbor(this, dir);
+            if (next == null || Rnd() >= 0.5f) return false;
+            int going = NisserCrossing(-1) + NisserCrossing(1);
+            return nisseBalance - going > -1 && target - going > 1 && next.TakesGuest();
+        }
         float nisseChangeTimer = 90;
 
         void UpdateNisser(float dt)
@@ -1533,7 +1566,9 @@ namespace JuleHygge
                 else if (Rnd() < 0.7f) nisseOffset += nisseOffset > 0 ? -1 : 1;
                 else nisseOffset = Math.Max(-2, Math.Min(2, nisseOffset + (nisseOffset > 0 ? 1 : -1)));
             }
-            int target = NisserOn ? Math.Max(1, cfg.NisseCount + nisseOffset) : 0;
+            // a lent or borrowed place is forgotten when there is no neighbour any more (or no nisser)
+            if (!NisserOn || (c.Neighbor(this, -1) == null && c.Neighbor(this, 1) == null)) nisseBalance = 0;
+            int target = NisserOn ? Math.Max(1, Math.Max(1, cfg.NisseCount + nisseOffset) + nisseBalance) : 0;
             int staying = 0;
             foreach (var n in nisser) if (!n.Leaving) staying++;
             if (staying < target)
@@ -1660,14 +1695,14 @@ namespace JuleHygge
                     if (n.Entering && n.X > 30 * S && n.X < W - 30 * S) n.Entering = false;
                     if (!n.Entering && !n.Leaving && !n.Crossing)
                     {
-                        // At an edge with a neighbouring screen, about half the nisser walk on over to it.
+                        // At an edge with a neighbouring screen, about half the nisser walk on over to it (see MayCross).
                         if (n.X < 30 * S)
                         {
-                            if (c.Neighbor(this, -1) != null && Rnd() < 0.5f) n.Crossing = true; else { n.X = 30 * S; n.Dir = 1; }
+                            if (MayCross(-1, target)) n.Crossing = true; else { n.X = 30 * S; n.Dir = 1; }
                         }
                         if (n.X > W - 30 * S)
                         {
-                            if (c.Neighbor(this, 1) != null && Rnd() < 0.5f) n.Crossing = true; else { n.X = W - 30 * S; n.Dir = -1; }
+                            if (MayCross(1, target)) n.Crossing = true; else { n.X = W - 30 * S; n.Dir = -1; }
                         }
                     }
                     // no stopping or turning while arriving, leaving or crossing to another screen
@@ -1697,7 +1732,12 @@ namespace JuleHygge
                 if (!(n.Leaving || n.Crossing) || (n.X >= -45 * S && n.X <= W + 45 * S)) continue;
                 nisser.RemoveAt(i);
                 var next = c.Neighbor(this, n.Dir);
-                if (next != null && NisserOn) next.ReceiveNisse(n, S);
+                if (next != null && NisserOn)
+                {
+                    // its place goes with it (not for one that was sent away: that one is on its way out)
+                    if (n.Crossing) { nisseBalance--; next.nisseBalance++; }
+                    next.ReceiveNisse(n, S);
+                }
             }
         }
 
@@ -1788,10 +1828,10 @@ namespace JuleHygge
         }
 
         // A nisse arriving from the neighbouring screen: it walks in at the matching edge, same clothes and direction.
+        // One that was sent away keeps walking, across this screen and out (it is not counted here).
         public void ReceiveNisse(Nisse n, float fromScale)
         {
             n.Crossing = false;
-            n.Leaving = false;
             n.Entering = true;
             n.State = 0;
             n.Speed = n.Speed / fromScale * S;

@@ -342,6 +342,26 @@ final class ScreenOverlay {
     private var nisser: [Nisse] = []
     /// How many nisser more or fewer than the chosen number are around right now (−2…+2).
     private var nisseOffset = 0
+    /// Places lent to (−) or borrowed from (+) the neighbouring screens. A nisse that walks over to the neighbour
+    /// takes its place along: the old screen adds no new one for it, and the new screen sends nobody away.
+    /// (Before, every crossing made a new nisse on the old screen while the new screen's surplus one was still
+    /// walking out, uncounted: three screens with 12 chosen showed up to 25 on one of them.)
+    private var nisseBalance = 0
+    /// Nisser on their way over to the neighbour in that direction: decided, not handed over yet.
+    private func nisserCrossing(_ dir: F) -> Int { nisser.filter { $0.crossing && $0.dir * dir > 0 }.count }
+    /// Whether one more nisse may walk in from a neighbour: at most one guest at a time, those on their way counted.
+    private var takesGuest: Bool {
+        var coming = 0
+        for d in [F(-1), 1] { coming += c.neighbor(of: self, dir: d)?.nisserCrossing(-d) ?? 0 }
+        return nisseBalance + coming < 1
+    }
+    /// At an edge with a neighbouring screen, about half the nisser walk on over to it, as long as this screen has
+    /// not already lent one, keeps at least one itself, and the neighbour has no guest already.
+    private func mayCross(_ dir: F, target: Int) -> Bool {
+        guard let next = c.neighbor(of: self, dir: dir), R() < 0.5 else { return false }
+        let going = nisser.filter { $0.crossing }.count
+        return nisseBalance - going > -1 && target - going > 1 && next.takesGuest
+    }
     private var nisseChangeTimer: F = F(Double(ProcessInfo.processInfo.environment["JULE_NISSE_SECONDS"] ?? "") ?? Double(90 + R() * 90))
     private var nisseLayers: [CALayer] = []
     /// Pre-rendered poses, shared by every nisse with the same clothes: key = variant + state + frame.
@@ -1953,9 +1973,11 @@ final class ScreenOverlay {
             else { nisseOffset = max(-2, min(2, nisseOffset + (nisseOffset > 0 ? 1 : -1))) }
         }
         let nisserOn = cfg.nisser && c.theme.hasNisser
-        let target = nisserOn ? max(1, cfg.nisseCount + nisseOffset) : 0
-        if ProcessInfo.processInfo.environment["JULE_NISSE_SECONDS"] != nil, frameNo % 40 == 0, isPrimary {
-            FileHandle.standardError.write("t=\(Int(c.time)) target=\(target) nisser=\(nisser.count) leaving=\(nisser.filter { $0.leaving }.count) entering=\(nisser.filter { $0.entering }.count) snow=\(String(format: "%.2f", c.snowIntensity))\n".data(using: .utf8)!)
+        // a lent or borrowed place is forgotten when there is no neighbour any more (or no nisser)
+        if !nisserOn || (c.neighbor(of: self, dir: -1) == nil && c.neighbor(of: self, dir: 1) == nil) { nisseBalance = 0 }
+        let target = nisserOn ? max(1, max(1, cfg.nisseCount + nisseOffset) + nisseBalance) : 0
+        if ProcessInfo.processInfo.environment["JULE_NISSE_SECONDS"] != nil, frameNo % 40 == 0 {
+            FileHandle.standardError.write("t=\(Int(c.time)) skærm=\(Int(screenBounds.minX)) target=\(target) balance=\(nisseBalance) nisser=\(nisser.count) leaving=\(nisser.filter { $0.leaving }.count) entering=\(nisser.filter { $0.entering }.count) snow=\(String(format: "%.2f", c.snowIntensity))\n".data(using: .utf8)!)
         }
         let staying = nisser.filter { !$0.leaving }.count
         if staying < target {
@@ -2053,12 +2075,12 @@ final class ScreenOverlay {
                 n.walkPhase += dt * n.speed / (4.5 * S)
                 if n.entering && n.x > 30 * S && n.x < W - 30 * S { n.entering = false }
                 if !n.entering && !n.leaving && !n.crossing {
-                    // At an edge with a neighbouring screen, about half the nisser walk on over to it.
+                    // At an edge with a neighbouring screen, about half the nisser walk on over to it (see mayCross).
                     if n.x < 30 * S {
-                        if c.neighbor(of: self, dir: -1) != nil && R() < 0.5 { n.crossing = true } else { n.x = 30 * S; n.dir = 1 }
+                        if mayCross(-1, target: target) { n.crossing = true } else { n.x = 30 * S; n.dir = 1 }
                     }
                     if n.x > W - 30 * S {
-                        if c.neighbor(of: self, dir: 1) != nil && R() < 0.5 { n.crossing = true } else { n.x = W - 30 * S; n.dir = -1 }
+                        if mayCross(1, target: target) { n.crossing = true } else { n.x = W - 30 * S; n.dir = -1 }
                     }
                 }
                 // no stopping or turning while arriving, leaving or crossing to another screen
@@ -2145,9 +2167,9 @@ final class ScreenOverlay {
     }
 
     /// A nisse arriving from the neighbouring screen: it walks in at the matching edge, same clothes and direction.
+    /// One that was sent away keeps walking, across this screen and out (it is not counted here).
     func receiveNisse(_ n: Nisse, fromScale oldS: F) {
         n.crossing = false
-        n.leaving = false
         n.entering = true
         n.state = 0
         n.speed = n.speed / oldS * S
@@ -2174,7 +2196,11 @@ final class ScreenOverlay {
             let n = nisser[i]
             guard (n.leaving || n.crossing) && (n.x < -45 * S || n.x > W + 45 * S) else { continue }
             removeNisse(at: i)
-            if let next = c.neighbor(of: self, dir: n.dir), cfg.nisser { next.receiveNisse(n, fromScale: S) }
+            if let next = c.neighbor(of: self, dir: n.dir), cfg.nisser {
+                // its place goes with it (not for one that was sent away: that one is on its way out)
+                if n.crossing { nisseBalance -= 1; next.nisseBalance += 1 }
+                next.receiveNisse(n, fromScale: S)
+            }
         }
         for (i, n) in nisser.enumerated() {
             let sc = S * n.size

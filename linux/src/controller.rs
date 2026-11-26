@@ -1349,9 +1349,31 @@ impl Controller {
             for elf in self.screens[i].layer.take_outgoing_elves() {
                 let rects: Vec<Rect> = self.screens.iter().map(|s| s.layer.rect).collect();
                 if let Some(j) = crate::figures::neighbor(&rects, i, elf.dir()) {
+                    // its place goes with it (not for one that was sent away: that one is on its way out)
+                    if elf.crossing() {
+                        self.screens[i].layer.elf_balance -= 1;
+                        self.screens[j].layer.elf_balance += 1;
+                    }
                     self.screens[j].layer.receive_elf(elf, from_scale);
                 }
             }
+        }
+        // Which screens can take one more elf as a guest in the next frame: at most one at a time, those already
+        // on their way over counted.
+        let rects: Vec<Rect> = self.screens.iter().map(|s| s.layer.rect).collect();
+        let sides: Vec<[Option<usize>; 2]> = (0..rects.len())
+            .map(|i| [crate::figures::neighbor(&rects, i, -1.0), crate::figures::neighbor(&rects, i, 1.0)])
+            .collect();
+        let room: Vec<bool> = (0..rects.len())
+            .map(|i| {
+                let from_left = sides[i][0].map_or(0, |j| self.screens[j].layer.elves_crossing(1.0));
+                let from_right = sides[i][1].map_or(0, |j| self.screens[j].layer.elves_crossing(-1.0));
+                self.screens[i].layer.elf_balance + from_left + from_right < 1
+            })
+            .collect();
+        for (i, s) in self.screens.iter_mut().enumerate() {
+            s.layer.guest_room_left = sides[i][0].is_some_and(|j| room[j]);
+            s.layer.guest_room_right = sides[i][1].is_some_and(|j| room[j]);
         }
     }
 
